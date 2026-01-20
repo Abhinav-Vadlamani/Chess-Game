@@ -300,7 +300,7 @@ class Renderer:
         # Hard Button (Red tint)
         hard_color = (171, 85, 85) if hard_button.collidepoint(mouse_pos) else (151, 65, 65)
         pygame.draw.rect(self.screen, hard_color, hard_button, border_radius=10)
-        hard_text = self.small_font.render("Hard - Strategic", True, TEXT_COLOR)
+        hard_text = self.small_font.render("Hard", True, TEXT_COLOR)
         self.screen.blit(hard_text, (hard_button.centerx - hard_text.get_width() // 2, 
                                      hard_button.centery - hard_text.get_height() // 2))
         
