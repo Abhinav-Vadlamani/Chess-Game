@@ -176,6 +176,8 @@ class Renderer:
 
         if game_mode == 'pvb_color_select':
             return self._draw_color_selection_menu()
+        elif game_mode == 'pvb_difficulty_select':
+            return self._draw_difficulty_selection_menu()
         else:
             return self._draw_main_menu()
         
@@ -259,17 +261,57 @@ class Renderer:
         self.screen.blit(back_text, (back_button.centerx - back_text.get_width() // 2, 
                                      back_button.centery - back_text.get_height() // 2))
         
-        # Info text
-        info_lines = [
-            "White moves first",
-            "Black moves second (AI will make first move)"
-        ]
-        
-        for i, line in enumerate(info_lines):
-            text = self.small_font.render(line, True, (200, 200, 200))
-            self.screen.blit(text, (WINDOW_SIZE // 2 - text.get_width() // 2, 580 + i * 25))
-        
         return white_button, black_button, back_button
+    
+    def _draw_difficulty_selection_menu(self):
+        # Title
+        title = self.font.render("Choose Difficulty", True, TEXT_COLOR)
+        self.screen.blit(title, (WINDOW_SIZE // 2 - title.get_width() // 2, 100))
+        
+        subtitle = self.small_font.render("Select AI difficulty level", True, TEXT_COLOR)
+        self.screen.blit(subtitle, (WINDOW_SIZE // 2 - subtitle.get_width() // 2, 150))
+
+        # Buttons
+        button_width = 300
+        button_height = 60
+        button_x = WINDOW_SIZE // 2 - button_width // 2
+        
+        easy_button = pygame.Rect(button_x, 230, button_width, button_height)
+        medium_button = pygame.Rect(button_x, 320, button_width, button_height)
+        hard_button = pygame.Rect(button_x, 410, button_width, button_height)
+        back_button = pygame.Rect(button_x, 500, button_width, button_height)
+        
+        mouse_pos = pygame.mouse.get_pos()
+
+        # Easy Button (Green tint)
+        easy_color = (120, 171, 105) if easy_button.collidepoint(mouse_pos) else (100, 151, 85)
+        pygame.draw.rect(self.screen, easy_color, easy_button, border_radius=10)
+        easy_text = self.small_font.render("Easy", True, TEXT_COLOR)
+        self.screen.blit(easy_text, (easy_button.centerx - easy_text.get_width() // 2, 
+                                     easy_button.centery - easy_text.get_height() // 2))
+        
+        # Medium Button (Yellow tint)
+        medium_color = (171, 151, 85) if medium_button.collidepoint(mouse_pos) else (151, 131, 65)
+        pygame.draw.rect(self.screen, medium_color, medium_button, border_radius=10)
+        medium_text = self.small_font.render("Medium", True, TEXT_COLOR)
+        self.screen.blit(medium_text, (medium_button.centerx - medium_text.get_width() // 2, 
+                                       medium_button.centery - medium_text.get_height() // 2))
+        
+        # Hard Button (Red tint)
+        hard_color = (171, 85, 85) if hard_button.collidepoint(mouse_pos) else (151, 65, 65)
+        pygame.draw.rect(self.screen, hard_color, hard_button, border_radius=10)
+        hard_text = self.small_font.render("Hard - Strategic", True, TEXT_COLOR)
+        self.screen.blit(hard_text, (hard_button.centerx - hard_text.get_width() // 2, 
+                                     hard_button.centery - hard_text.get_height() // 2))
+        
+        # Back Button
+        back_color = (100, 100, 100) if back_button.collidepoint(mouse_pos) else (70, 70, 70)
+        pygame.draw.rect(self.screen, back_color, back_button, border_radius=10)
+        back_text = self.small_piece_font.render("← Back to Menu", True, TEXT_COLOR)
+        self.screen.blit(back_text, (back_button.centerx - back_text.get_width() // 2, 
+                                     back_button.centery - back_text.get_height() // 2))
+        
+        return easy_button, medium_button, hard_button, back_button
                 
 
     def _draw_button(self, rect, text, mouse_pos):
