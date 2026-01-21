@@ -53,3 +53,4 @@ pip install pygame
 - [ ] Fix time box on screen
 - [ ] Move history panel
 - [ ] Flip board when user is black against bot
+- [ ] Captured piece display
