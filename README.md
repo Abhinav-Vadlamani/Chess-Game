@@ -25,7 +25,7 @@ chess_game/
 
 ### Complete Chess Implementation with AI features
 - **Full features (Checks, Checkmates, Stalemate, Draw, 50 move rule, etc)**
-- **Easy, Medium, Hard AI bots**: Easy bot randomly picks a move, medium bot uses minimax algorithm, and hardbot uses sunfish algorithm
+- **Easy, Medium, Hard AI bots**: Easy bot randomly picks a move, medium bot uses minimax algorithm, and hardbot uses sunfish algorithm + book of openings
 - **Timer**: Timer available for User vs User play
 
 ## 🚀 Installation
