@@ -52,3 +52,4 @@ pip install pygame
 - [ ] Draw Conditions (50-move rule, three fold repition, insufficient material)
 - [ ] Fix time box on screen
 - [ ] Move history panel
+- [ ] Flip board when user is black against bot
