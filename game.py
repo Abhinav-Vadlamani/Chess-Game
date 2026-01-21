@@ -28,6 +28,7 @@ class ChessGame:
         self.ai = None
         self.game_over = False
         self.winner = None
+        self.draw_reason = None
 
         # Drag and drop state
         self.dragging = False
@@ -49,6 +50,9 @@ class ChessGame:
             'black_seconds': '',
             'active_field': None  # Which field is being edited
         }
+
+        # Move history panel state
+        self.show_move_history = False
 
     def run(self):
         """
@@ -222,12 +226,22 @@ class ChessGame:
                     return True
 
             if start_button.collidepoint(pos):
-                # Start game with time control
-                self.game_mode = 'pvp'
-                self.player_color = None
-                self.use_timer = True
-                self._reset_timer_for_game()
-                self.reset_game()
+                # Validate time - must be greater than 0 for both players
+                white_min = int(self.time_input['white_minutes'] or '0')
+                white_sec = int(self.time_input['white_seconds'] or '0')
+                black_min = int(self.time_input['black_minutes'] or '0')
+                black_sec = int(self.time_input['black_seconds'] or '0')
+
+                white_total = white_min * 60 + white_sec
+                black_total = black_min * 60 + black_sec
+
+                # Only start if both players have time > 0
+                if white_total > 0 and black_total > 0:
+                    self.game_mode = 'pvp'
+                    self.player_color = None
+                    self.use_timer = True
+                    self._reset_timer_for_game()
+                    self.reset_game()
             elif no_time_button.collidepoint(pos):
                 # Start game without time control
                 self.game_mode = 'pvp'
@@ -286,8 +300,18 @@ class ChessGame:
         Args:
             pos: mouse position
         """
+        # Check for history button click
+        history_button = self.renderer.get_history_button_rect()
+        if history_button.collidepoint(pos):
+            self.show_move_history = not self.show_move_history
+            return
 
         if self.game_over:
+            return
+
+        # If move history panel is open, close it on any click outside
+        if self.show_move_history:
+            self.show_move_history = False
             return
 
         # Handle promotion dialog clicks
@@ -559,18 +583,42 @@ class ChessGame:
     
     def _check_game_over(self):
         """
-        Check if the game is over
+        Check if the game is over (checkmate or draw)
         """
 
-        # checkmate
+        # Checkmate
         if self.board.is_checkmate():
             self.game_over = True
             self.winner = "Black" if self.board.current_turn == Color.WHITE else "White"
-        
-        # stalemate
-        elif self.board.is_stalemate():
+            return
+
+        # Stalemate
+        if self.board.is_stalemate():
             self.game_over = True
-            self.winner = None
+            self.winner = "Draw"
+            self.draw_reason = "Stalemate"
+            return
+
+        # Insufficient material
+        if self.board.is_insufficient_material():
+            self.game_over = True
+            self.winner = "Draw"
+            self.draw_reason = "Insufficient material"
+            return
+
+        # Threefold repetition
+        if self.board.is_threefold_repetition():
+            self.game_over = True
+            self.winner = "Draw"
+            self.draw_reason = "Threefold repetition"
+            return
+
+        # Fifty-move rule
+        if self.board.is_fifty_move_rule():
+            self.game_over = True
+            self.winner = "Draw"
+            self.draw_reason = "Fifty-move rule"
+            return
     
     def reset_game(self):
         """
@@ -585,6 +633,8 @@ class ChessGame:
         self.pending_promotion = None
         self.game_over = False
         self.winner = None
+        self.draw_reason = None
+        self.show_move_history = False
 
         # Reset drag state
         self.dragging = False
@@ -626,7 +676,10 @@ class ChessGame:
                     'black_time': self.black_time
                 }
 
-            self.renderer.draw_game_ui(self.board, self.game_mode, self.game_over, self.winner, timer_info)
+            self.renderer.draw_game_ui(self.board, self.game_mode, self.game_over, self.winner, timer_info, self.draw_reason, self.show_move_history)
+
+            # Draw history toggle button
+            self.renderer.draw_history_button(self.show_move_history)
 
             # Draw dragged piece at cursor
             if self.dragging and self.drag_piece and self.drag_pos:

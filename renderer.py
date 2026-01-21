@@ -29,6 +29,7 @@ class Renderer:
         self.small_font = pygame.font.Font(None, 24)
         self.piece_font = pygame.font.SysFont('Apple Symbols', 60)
         self.small_piece_font = pygame.font.SysFont('Apple Symbols', 24)
+        self.captured_font = pygame.font.SysFont('Apple Symbols', 18)
     
     def draw_board(self, board, selected_square = None, valid_moves = None, last_move = None):
         """
@@ -138,7 +139,7 @@ class Renderer:
             y = BOARD_OFFSET + i * SQUARE_SIZE + SQUARE_SIZE // 2 - text.get_height() // 2
             self.screen.blit(text, (20, y))
 
-    def draw_game_ui(self, board, game_mode, game_over=False, winner=None, timer_info=None):
+    def draw_game_ui(self, board, game_mode, game_over=False, winner=None, timer_info=None, draw_reason=None, show_move_history=False):
         """
         Draw game UI elements
 
@@ -146,8 +147,10 @@ class Renderer:
             board: ChessBoard instance
             game_mode: Current game mode (pvp or pvb)
             game_over: Whether or not the game is over
-            winner: Winner of the game
+            winner: Winner of the game, or "Draw" for draws
             timer_info: Dict with 'white_time' and 'black_time' in milliseconds
+            draw_reason: Reason for draw (if applicable)
+            show_move_history: Whether to show the move history panel
         """
 
         # turn indicator
@@ -169,6 +172,9 @@ class Renderer:
         if timer_info:
             self._draw_timers(timer_info, board.current_turn)
 
+        # Draw captured pieces display
+        self._draw_captured_pieces(board)
+
         # Controls
         controls_text = "ESC: Menu  |  R: Restart  |  Q: Quit"
         text = self.small_font.render(controls_text, True, TEXT_COLOR)
@@ -177,9 +183,13 @@ class Renderer:
         y_pos = BOARD_OFFSET + BOARD_SIZE + 35
         self.screen.blit(text, (x_pos, y_pos))
 
+        # Draw move history panel if open
+        if show_move_history:
+            self._draw_move_history_panel(board)
+
         # Game over message
         if game_over:
-            self._draw_game_over_overlay(winner, timer_info)
+            self._draw_game_over_overlay(winner, timer_info, draw_reason)
 
     def _draw_timers(self, timer_info, current_turn):
         """
@@ -202,11 +212,11 @@ class Renderer:
             return f"{minutes:02d}:{seconds:02d}"
 
         # Timer box dimensions
-        box_width = 100
+        box_width = 65
         box_height = 40
 
         # Black timer (top right of board)
-        black_box = pygame.Rect(BOARD_OFFSET + BOARD_SIZE + 10, BOARD_OFFSET, box_width, box_height)
+        black_box = pygame.Rect(BOARD_OFFSET + BOARD_SIZE + 5, BOARD_OFFSET, box_width, box_height)
         black_color = (60, 60, 60) if current_turn == Color.BLACK else (40, 40, 40)
         pygame.draw.rect(self.screen, black_color, black_box, border_radius=5)
         pygame.draw.rect(self.screen, (100, 100, 100), black_box, 2, border_radius=5)
@@ -216,7 +226,7 @@ class Renderer:
                                            black_box.centery - black_time_text.get_height() // 2))
 
         # White timer (bottom right of board)
-        white_box = pygame.Rect(BOARD_OFFSET + BOARD_SIZE + 10, BOARD_OFFSET + BOARD_SIZE - box_height,
+        white_box = pygame.Rect(BOARD_OFFSET + BOARD_SIZE + 5, BOARD_OFFSET + BOARD_SIZE - box_height,
                                 box_width, box_height)
         white_color = (80, 80, 80) if current_turn == Color.WHITE else (50, 50, 50)
         pygame.draw.rect(self.screen, white_color, white_box, border_radius=5)
@@ -226,13 +236,173 @@ class Renderer:
         self.screen.blit(white_time_text, (white_box.centerx - white_time_text.get_width() // 2,
                                            white_box.centery - white_time_text.get_height() // 2))
 
-    def _draw_game_over_overlay(self, winner, timer_info=None):
+    def _draw_captured_pieces(self, board):
+        """
+        Draw captured pieces display for both players, similar to chess.com style.
+
+        Args:
+            board: ChessBoard instance
+        """
+        captured = board.get_captured_pieces()
+
+        # Piece order by value (high to low)
+        piece_order = [PieceType.QUEEN, PieceType.ROOK, PieceType.BISHOP, PieceType.KNIGHT, PieceType.PAWN]
+        piece_values = {
+            PieceType.QUEEN: 9, PieceType.ROOK: 5, PieceType.BISHOP: 3,
+            PieceType.KNIGHT: 3, PieceType.PAWN: 1
+        }
+
+        def sort_pieces(pieces):
+            """Sort pieces by value (highest first)"""
+            return sorted(pieces, key=lambda p: piece_order.index(p.piece_type))
+
+        def calc_material(pieces):
+            """Calculate total material value"""
+            return sum(piece_values.get(p.piece_type, 0) for p in pieces)
+
+        # Calculate material advantage
+        white_material = calc_material(captured['white'])
+        black_material = calc_material(captured['black'])
+        advantage = white_material - black_material
+
+        # Position settings
+        start_x = BOARD_OFFSET + BOARD_SIZE + 5
+        piece_spacing = 16
+
+        # Draw pieces captured by black (white pieces) - below black's timer, going down
+        black_captured = sort_pieces(captured['black'])
+        y_start_black = BOARD_OFFSET + 45
+        y = y_start_black
+        for piece in black_captured:
+            symbol = self.PIECE_SYMBOLS[(piece.color, piece.piece_type)]
+            text = self.captured_font.render(symbol, True, (200, 200, 200))
+            self.screen.blit(text, (start_x, y))
+            y += piece_spacing
+
+        # Show material advantage for black next to first piece
+        if advantage < 0 and black_captured:
+            adv_text = self.small_font.render(f"+{-advantage}", True, (150, 150, 150))
+            self.screen.blit(adv_text, (start_x + 20, y_start_black + 2))
+
+        # Draw pieces captured by white (black pieces) - above white's timer, going up
+        white_captured = sort_pieces(captured['white'])
+        y_start_white = BOARD_OFFSET + BOARD_SIZE - 60
+        y = y_start_white
+        for piece in white_captured:
+            symbol = self.PIECE_SYMBOLS[(piece.color, piece.piece_type)]
+            text = self.captured_font.render(symbol, True, (60, 60, 60))
+            self.screen.blit(text, (start_x, y))
+            y -= piece_spacing
+
+        # Show material advantage for white next to first piece
+        if advantage > 0 and white_captured:
+            adv_text = self.small_font.render(f"+{advantage}", True, (150, 150, 150))
+            self.screen.blit(adv_text, (start_x + 20, y_start_white + 2))
+
+    def get_history_button_rect(self):
+        """
+        Get the rectangle for the move history toggle button.
+
+        Returns:
+            pygame.Rect for the history button
+        """
+        return pygame.Rect(WINDOW_SIZE - 80, 45, 70, 25)
+
+    def draw_history_button(self, show_move_history):
+        """
+        Draw the move history toggle button.
+
+        Args:
+            show_move_history: Whether the panel is currently shown
+        """
+        button = self.get_history_button_rect()
+        mouse_pos = pygame.mouse.get_pos()
+
+        # Button colors
+        if button.collidepoint(mouse_pos):
+            color = (100, 100, 100)
+        else:
+            color = (70, 70, 70)
+
+        pygame.draw.rect(self.screen, color, button, border_radius=5)
+
+        # Button text
+        btn_text = "Hide" if show_move_history else "Moves"
+        text = self.small_font.render(btn_text, True, TEXT_COLOR)
+        self.screen.blit(text, (button.centerx - text.get_width() // 2,
+                                button.centery - text.get_height() // 2))
+
+    def _draw_move_history_panel(self, board):
+        """
+        Draw the move history panel overlay.
+
+        Args:
+            board: ChessBoard instance
+        """
+        # Panel dimensions
+        panel_width = 200
+        panel_height = 400
+        panel_x = WINDOW_SIZE // 2 - panel_width // 2
+        panel_y = WINDOW_SIZE // 2 - panel_height // 2
+
+        # Draw panel background
+        panel_rect = pygame.Rect(panel_x, panel_y, panel_width, panel_height)
+        pygame.draw.rect(self.screen, (40, 40, 40), panel_rect, border_radius=10)
+        pygame.draw.rect(self.screen, (100, 100, 100), panel_rect, 2, border_radius=10)
+
+        # Title
+        title = self.font.render("Move History", True, TEXT_COLOR)
+        self.screen.blit(title, (panel_x + panel_width // 2 - title.get_width() // 2, panel_y + 10))
+
+        # Get move notation
+        moves = board.get_move_history_notation()
+
+        # Draw moves in two columns (white and black)
+        start_y = panel_y + 50
+        row_height = 22
+        max_rows = (panel_height - 70) // row_height
+
+        # Scroll offset based on number of moves
+        total_move_pairs = (len(moves) + 1) // 2
+        scroll_offset = max(0, total_move_pairs - max_rows)
+
+        for i in range(scroll_offset, total_move_pairs):
+            row = i - scroll_offset
+            if row >= max_rows:
+                break
+
+            y = start_y + row * row_height
+            move_num = i + 1
+
+            # Move number
+            num_text = self.small_font.render(f"{move_num}.", True, (150, 150, 150))
+            self.screen.blit(num_text, (panel_x + 10, y))
+
+            # White's move
+            white_idx = i * 2
+            if white_idx < len(moves):
+                white_move = self.small_font.render(moves[white_idx], True, TEXT_COLOR)
+                self.screen.blit(white_move, (panel_x + 40, y))
+
+            # Black's move
+            black_idx = i * 2 + 1
+            if black_idx < len(moves):
+                black_move = self.small_font.render(moves[black_idx], True, TEXT_COLOR)
+                self.screen.blit(black_move, (panel_x + 110, y))
+
+        # Show hint to close
+        hint = self.small_font.render("Click 'Hide' to close", True, (120, 120, 120))
+        self.screen.blit(hint, (panel_x + panel_width // 2 - hint.get_width() // 2,
+                                panel_y + panel_height - 25))
+
+    def _draw_game_over_overlay(self, winner, timer_info=None, draw_reason=None):
         """
         Draw game over overlay
 
         Args:
-            winner: player that won
+            winner: player that won, or "Draw" for draws
             timer_info: Timer info to detect timeout
+            draw_reason: Reason for draw (if applicable)
         """
 
         overlay = pygame.Surface((WINDOW_SIZE, WINDOW_SIZE))
@@ -240,7 +410,9 @@ class Renderer:
         overlay.fill((0, 0, 0))
         self.screen.blit(overlay, (0, 0))
 
-        if winner:
+        if winner == "Draw":
+            message = f"Draw - {draw_reason}!" if draw_reason else "Draw!"
+        elif winner:
             # Check if it was a timeout
             if timer_info:
                 if timer_info['white_time'] <= 0 or timer_info['black_time'] <= 0:
@@ -250,7 +422,7 @@ class Renderer:
             else:
                 message = f"{winner} wins by checkmate!"
         else:
-            message = "Stalemate - Draw!"
+            message = "Draw!"
 
         text = self.font.render(message, True, TEXT_COLOR)
         self.screen.blit(text, (WINDOW_SIZE // 2 - text.get_width() // 2, WINDOW_SIZE // 2 - 50))
@@ -484,21 +656,39 @@ class Renderer:
         min_label2 = self.small_font.render("min    sec", True, (150, 150, 150))
         self.screen.blit(min_label2, (WINDOW_SIZE // 2 - 45, 330))
 
+        # Check if time input is valid (both players must have time > 0)
+        white_min = int(time_input['white_minutes'] or '0')
+        white_sec = int(time_input['white_seconds'] or '0')
+        black_min = int(time_input['black_minutes'] or '0')
+        black_sec = int(time_input['black_seconds'] or '0')
+        white_total = white_min * 60 + white_sec
+        black_total = black_min * 60 + black_sec
+        time_valid = white_total > 0 and black_total > 0
+
         # Buttons
         button_width = 300
         button_height = 50
         button_x = WINDOW_SIZE // 2 - button_width // 2
 
-        # Start with time button
+        # Start with time button (grayed out if time invalid)
         start_button = pygame.Rect(button_x, 380, button_width, button_height)
-        start_color = BUTTON_HOVER if start_button.collidepoint(mouse_pos) else BUTTON_COLOR
+        if time_valid:
+            start_color = BUTTON_HOVER if start_button.collidepoint(mouse_pos) else BUTTON_COLOR
+        else:
+            start_color = (80, 80, 80)  # Grayed out
         pygame.draw.rect(self.screen, start_color, start_button, border_radius=10)
-        start_text = self.small_font.render("Start with Time", True, TEXT_COLOR)
+        start_text = self.small_font.render("Start with Time", True, TEXT_COLOR if time_valid else (120, 120, 120))
         self.screen.blit(start_text, (start_button.centerx - start_text.get_width() // 2,
                                       start_button.centery - start_text.get_height() // 2))
 
+        # Show hint if time is invalid
+        if not time_valid:
+            hint_text = self.small_font.render("(Enter time > 0 for both players)", True, (180, 100, 100))
+            self.screen.blit(hint_text, (WINDOW_SIZE // 2 - hint_text.get_width() // 2, 432))
+
         # No time button
-        no_time_button = pygame.Rect(button_x, 450, button_width, button_height)
+        no_time_y = 460 if not time_valid else 450
+        no_time_button = pygame.Rect(button_x, no_time_y, button_width, button_height)
         no_time_color = (100, 100, 100) if no_time_button.collidepoint(mouse_pos) else (70, 70, 70)
         pygame.draw.rect(self.screen, no_time_color, no_time_button, border_radius=10)
         no_time_text = self.small_font.render("Play without Time", True, TEXT_COLOR)
@@ -506,10 +696,11 @@ class Renderer:
                                         no_time_button.centery - no_time_text.get_height() // 2))
 
         # Back button
-        back_button = pygame.Rect(button_x, 520, button_width, button_height)
+        back_y = 530 if not time_valid else 520
+        back_button = pygame.Rect(button_x, back_y, button_width, button_height)
         back_color = (80, 80, 80) if back_button.collidepoint(mouse_pos) else (60, 60, 60)
         pygame.draw.rect(self.screen, back_color, back_button, border_radius=10)
-        back_text = self.small_font.render("← Back", True, TEXT_COLOR)
+        back_text = self.small_piece_font.render("← Back", True, TEXT_COLOR)
         self.screen.blit(back_text, (back_button.centerx - back_text.get_width() // 2,
                                      back_button.centery - back_text.get_height() // 2))
 

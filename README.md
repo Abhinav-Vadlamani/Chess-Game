@@ -27,6 +27,7 @@ chess_game/
 - **Full features (Checks, Checkmates, Stalemate, Draw, 50 move rule, etc)**
 - **Easy, Medium, Hard AI bots**: Easy bot randomly picks a move, medium bot uses minimax algorithm, and hardbot uses sunfish algorithm + book of openings
 - **Timer**: Timer available for User vs User play
+- **UI**: Easy to use UI with moves list, highlighting for moves, and dragging pieces around
 
 ## 🚀 Installation
 
@@ -47,10 +48,3 @@ pip install pygame
 ```
 
 3. **Run file through main.py**
-
-## 🚀 Future Enhancements
-- [ ] Draw Conditions (50-move rule, three fold repition, insufficient material)
-- [ ] Fix time box on screen
-- [ ] Move history panel
-- [ ] Flip board when user is black against bot
-- [ ] Captured piece display

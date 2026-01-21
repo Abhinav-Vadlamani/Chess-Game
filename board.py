@@ -407,8 +407,8 @@ class ChessBoard:
         Check if game is stalemate
         """
         if self.is_in_check(self.current_turn):
-            return False 
-        
+            return False
+
         for r in range(8):
             for c in range(8):
                 piece = self.board[r][c]
@@ -416,7 +416,143 @@ class ChessBoard:
                     if len(self.get_valid_moves(r, c)) > 0:
                         return False
         return True
-    
+
+    def is_insufficient_material(self):
+        """
+        Check if there is insufficient material to checkmate.
+        Draw conditions:
+        - King vs King
+        - King + Bishop vs King
+        - King + Knight vs King
+        - King + Bishop vs King + Bishop (same color squares)
+        """
+        pieces = {'white': [], 'black': []}
+
+        for r in range(8):
+            for c in range(8):
+                piece = self.board[r][c]
+                if piece:
+                    if piece.color == Color.WHITE:
+                        pieces['white'].append((piece.piece_type, r, c))
+                    else:
+                        pieces['black'].append((piece.piece_type, r, c))
+
+        white_types = set(p[0] for p in pieces['white'])
+        black_types = set(p[0] for p in pieces['black'])
+        white_count = len(pieces['white'])
+        black_count = len(pieces['black'])
+
+        # King vs King
+        if white_count == 1 and black_count == 1:
+            return True
+
+        # King + Bishop vs King
+        if white_count == 2 and white_types == {PieceType.KING, PieceType.BISHOP} and black_count == 1:
+            return True
+        if black_count == 2 and black_types == {PieceType.KING, PieceType.BISHOP} and white_count == 1:
+            return True
+
+        # King + Knight vs King
+        if white_count == 2 and white_types == {PieceType.KING, PieceType.KNIGHT} and black_count == 1:
+            return True
+        if black_count == 2 and black_types == {PieceType.KING, PieceType.KNIGHT} and white_count == 1:
+            return True
+
+        # King + Bishop vs King + Bishop (same color squares)
+        if (white_count == 2 and white_types == {PieceType.KING, PieceType.BISHOP} and
+            black_count == 2 and black_types == {PieceType.KING, PieceType.BISHOP}):
+            # Find bishop positions
+            white_bishop_pos = next((r, c) for pt, r, c in pieces['white'] if pt == PieceType.BISHOP)
+            black_bishop_pos = next((r, c) for pt, r, c in pieces['black'] if pt == PieceType.BISHOP)
+            # Same color square if sum of coordinates has same parity
+            if (white_bishop_pos[0] + white_bishop_pos[1]) % 2 == (black_bishop_pos[0] + black_bishop_pos[1]) % 2:
+                return True
+
+        return False
+
+    def is_threefold_repetition(self):
+        """
+        Check if the current position has occurred three times.
+        """
+        if len(self.move_history) < 8:
+            return False
+
+        current_position = self._get_position_key()
+        count = 1
+
+        # Check previous positions by replaying moves
+        temp_board = ChessBoard()
+        positions = [temp_board._get_position_key()]
+
+        for move in self.move_history:
+            from_row, from_col = move.from_position
+            to_row, to_col = move.to_position
+            promotion = move.promotion_piece.piece_type if move.promotion_piece else None
+            temp_board.board[to_row][to_col] = temp_board.board[from_row][from_col]
+            temp_board.board[from_row][from_col] = None
+
+            # Handle castling
+            if move.is_castling:
+                if to_col > from_col:  # Kingside
+                    temp_board.board[from_row][5] = temp_board.board[from_row][7]
+                    temp_board.board[from_row][7] = None
+                else:  # Queenside
+                    temp_board.board[from_row][3] = temp_board.board[from_row][0]
+                    temp_board.board[from_row][0] = None
+
+            # Handle en passant
+            if move.is_en_passant:
+                temp_board.board[from_row][to_col] = None
+
+            # Handle promotion
+            if promotion:
+                temp_board.board[to_row][to_col].piece_type = promotion
+
+            temp_board.current_turn = temp_board.current_turn.opposite()
+            positions.append(temp_board._get_position_key())
+
+        # Count occurrences of current position
+        count = positions.count(current_position)
+        return count >= 3
+
+    def _get_position_key(self):
+        """
+        Get a hashable key representing the current board position.
+        """
+        key = []
+        for r in range(8):
+            for c in range(8):
+                piece = self.board[r][c]
+                if piece:
+                    key.append((r, c, piece.piece_type.value, piece.color.value))
+        key.append(self.current_turn.value)
+        return tuple(key)
+
+    def is_fifty_move_rule(self):
+        """
+        Check if 50 moves have been made without a pawn move or capture.
+        """
+        if len(self.move_history) < 100:  # 50 moves = 100 half-moves
+            return False
+
+        # Check last 100 half-moves (50 full moves)
+        for move in self.move_history[-100:]:
+            # Check for capture
+            if move.captured_piece:
+                return False
+            # Check for pawn move
+            from_row, from_col = move.from_position
+            # We need to check what piece made the move - look at to_position
+            to_row, to_col = move.to_position
+            piece = self.board[to_row][to_col]
+            if piece and piece.piece_type == PieceType.PAWN:
+                return False
+            # Also check promotion (which means a pawn moved)
+            if move.promotion_piece:
+                return False
+
+        return True
+
     def get_all_valid_moves(self):
         """
         Returns list of all valid moves for the current player
@@ -566,3 +702,196 @@ class ChessBoard:
         if undo_info['is_en_passant']:
             ep_pos = undo_info['ep_captured_pos']
             self.board[ep_pos[0]][ep_pos[1]] = undo_info['ep_captured_piece']
+
+    def get_captured_pieces(self):
+        """
+        Get all captured pieces grouped by which player captured them.
+
+        Returns:
+            dict with 'white' and 'black' keys, each containing a list of captured Piece objects.
+            'white' = pieces captured by white (black pieces)
+            'black' = pieces captured by black (white pieces)
+        """
+        captured = {'white': [], 'black': []}
+
+        for i, move in enumerate(self.move_history):
+            if move.captured_piece:
+                # Even moves (0, 2, 4...) are white's moves, odd are black's
+                if i % 2 == 0:
+                    captured['white'].append(move.captured_piece)
+                else:
+                    captured['black'].append(move.captured_piece)
+
+        return captured
+
+    def get_move_history_notation(self):
+        """
+        Get move history in algebraic notation.
+
+        Returns:
+            List of move strings in algebraic notation (e.g., ['e4', 'e5', 'Nf3', 'Nc6'])
+        """
+        files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
+        ranks = ['8', '7', '6', '5', '4', '3', '2', '1']
+
+        piece_symbols = {
+            PieceType.KING: 'K',
+            PieceType.QUEEN: 'Q',
+            PieceType.ROOK: 'R',
+            PieceType.BISHOP: 'B',
+            PieceType.KNIGHT: 'N',
+            PieceType.PAWN: ''
+        }
+
+        notation_list = []
+
+        for move in self.move_history:
+            from_row, from_col = move.from_position
+            to_row, to_col = move.to_position
+
+            # Castling
+            if move.is_castling:
+                if to_col > from_col:
+                    notation = 'O-O'  # Kingside
+                else:
+                    notation = 'O-O-O'  # Queenside
+            else:
+                # Get piece symbol (need to figure out what piece moved)
+                # Since the piece has already moved, we need to look at the destination
+                # But for promotions, piece_type changed. Use promotion_piece info.
+                if move.promotion_piece:
+                    piece_symbol = ''  # Pawn
+                    promotion_symbol = piece_symbols.get(move.promotion_piece.piece_type, '')
+                else:
+                    # We need to reconstruct what piece was there
+                    # Look at the piece that's currently at to_position after all moves
+                    # This is tricky - let's track it differently
+                    # For now, we'll replay to find piece types
+                    piece_symbol = ''
+                    promotion_symbol = ''
+
+                to_square = files[to_col] + ranks[to_row]
+
+                # Check for capture
+                capture = 'x' if move.captured_piece else ''
+
+                # For pawns capturing, include the file
+                if piece_symbol == '' and capture:
+                    from_file = files[from_col]
+                    notation = f"{from_file}{capture}{to_square}"
+                else:
+                    notation = f"{piece_symbol}{capture}{to_square}"
+
+                # Add promotion
+                if move.promotion_piece:
+                    notation += f"={piece_symbols.get(move.promotion_piece.piece_type, 'Q')}"
+
+            notation_list.append(notation)
+
+        # Now we need to add piece symbols - replay the game to track pieces
+        # Let's do a proper implementation
+        return self._get_proper_notation()
+
+    def _get_proper_notation(self):
+        """
+        Get proper algebraic notation by replaying moves.
+        """
+        files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
+        ranks = ['8', '7', '6', '5', '4', '3', '2', '1']
+
+        piece_symbols = {
+            PieceType.KING: 'K',
+            PieceType.QUEEN: 'Q',
+            PieceType.ROOK: 'R',
+            PieceType.BISHOP: 'B',
+            PieceType.KNIGHT: 'N',
+            PieceType.PAWN: ''
+        }
+
+        notation_list = []
+
+        # Create a temporary board to replay
+        temp_board = [[None for _ in range(8)] for _ in range(8)]
+
+        # Setup initial position
+        for i in range(8):
+            temp_board[1][i] = Piece(PieceType.PAWN, Color.BLACK)
+            temp_board[6][i] = Piece(PieceType.PAWN, Color.WHITE)
+
+        temp_board[0][0] = Piece(PieceType.ROOK, Color.BLACK)
+        temp_board[0][7] = Piece(PieceType.ROOK, Color.BLACK)
+        temp_board[7][0] = Piece(PieceType.ROOK, Color.WHITE)
+        temp_board[7][7] = Piece(PieceType.ROOK, Color.WHITE)
+
+        temp_board[0][1] = Piece(PieceType.KNIGHT, Color.BLACK)
+        temp_board[0][6] = Piece(PieceType.KNIGHT, Color.BLACK)
+        temp_board[7][1] = Piece(PieceType.KNIGHT, Color.WHITE)
+        temp_board[7][6] = Piece(PieceType.KNIGHT, Color.WHITE)
+
+        temp_board[0][2] = Piece(PieceType.BISHOP, Color.BLACK)
+        temp_board[0][5] = Piece(PieceType.BISHOP, Color.BLACK)
+        temp_board[7][2] = Piece(PieceType.BISHOP, Color.WHITE)
+        temp_board[7][5] = Piece(PieceType.BISHOP, Color.WHITE)
+
+        temp_board[0][3] = Piece(PieceType.QUEEN, Color.BLACK)
+        temp_board[7][3] = Piece(PieceType.QUEEN, Color.WHITE)
+
+        temp_board[0][4] = Piece(PieceType.KING, Color.BLACK)
+        temp_board[7][4] = Piece(PieceType.KING, Color.WHITE)
+
+        for move in self.move_history:
+            from_row, from_col = move.from_position
+            to_row, to_col = move.to_position
+
+            piece = temp_board[from_row][from_col]
+            if not piece:
+                notation_list.append("???")
+                continue
+
+            # Castling
+            if move.is_castling:
+                if to_col > from_col:
+                    notation = 'O-O'
+                else:
+                    notation = 'O-O-O'
+            else:
+                piece_symbol = piece_symbols.get(piece.piece_type, '')
+                to_square = files[to_col] + ranks[to_row]
+                capture = 'x' if move.captured_piece else ''
+
+                if piece.piece_type == PieceType.PAWN:
+                    if capture:
+                        notation = f"{files[from_col]}{capture}{to_square}"
+                    else:
+                        notation = to_square
+                else:
+                    notation = f"{piece_symbol}{capture}{to_square}"
+
+                # Promotion
+                if move.promotion_piece:
+                    notation += f"={piece_symbols.get(move.promotion_piece.piece_type, 'Q')}"
+
+            notation_list.append(notation)
+
+            # Update temp board
+            temp_board[to_row][to_col] = piece
+            temp_board[from_row][from_col] = None
+
+            # Handle castling rook movement
+            if move.is_castling:
+                if to_col > from_col:  # Kingside
+                    temp_board[from_row][5] = temp_board[from_row][7]
+                    temp_board[from_row][7] = None
+                else:  # Queenside
+                    temp_board[from_row][3] = temp_board[from_row][0]
+                    temp_board[from_row][0] = None
+
+            # Handle en passant
+            if move.is_en_passant:
+                temp_board[from_row][to_col] = None
+
+            # Handle promotion
+            if move.promotion_piece:
+                temp_board[to_row][to_col].piece_type = move.promotion_piece.piece_type
+
+        return notation_list
