@@ -13,6 +13,7 @@ DARK_SQUARE = (181, 136, 99)
 HIGHLIGHT_MOVE = (186, 202, 68)
 HIGHLIGHT_SELECTED = (246, 246, 130)
 HIGHLIGHT_CHECK = (255, 100, 100)
+HIGHLIGHT_LAST_MOVE = (205, 210, 106)
 BG_COLOR = (49, 46, 43)
 TEXT_COLOR = (255, 255, 255)
 BUTTON_COLOR = (130, 151, 105)
@@ -25,8 +26,8 @@ RANKS = ['8', '7', '6', '5', '4', '3', '2', '1']
 # AI Configuration
 AI_DIFFICULTY_DEPTHS = {
     'easy': 1,
-    'medium': 2,
-    'hard': 3
+    'medium': 3,
+    'hard': 3  # unused - hard uses Sunfish engine
 }
 
 # Piece values

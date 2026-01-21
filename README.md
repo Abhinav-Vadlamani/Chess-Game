@@ -24,6 +24,9 @@ chess_game/
 - **Player vs Bot (PvBot)**: Challenge an AI opponent
 
 ### Complete Chess Implementation with AI features
+- **Full features (Checks, Checkmates, Stalemate, Draw, 50 move rule, etc)**
+- **Easy, Medium, Hard AI bots**: Easy bot randomly picks a move, medium bot uses minimax algorithm, and hardbot uses sunfish algorithm
+- **Timer**: Timer available for User vs User play
 
 ## 🚀 Installation
 
@@ -46,6 +49,6 @@ pip install pygame
 3. **Run file through main.py**
 
 ## 🚀 Future Enhancements
-- [ ] Enhanced pawn promotion
-- [ ] Enhanced chess AI (better and faster)
-- [ ] Opening book for the AI
+- [ ] Draw Conditions (50-move rule, three fold repition, insufficient material)
+- [ ] Fix time box on screen
+- [ ] Move history panel
