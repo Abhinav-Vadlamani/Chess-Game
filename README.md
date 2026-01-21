@@ -39,6 +39,7 @@ chess_game/
 
 1. **Clone or download the project**
 ```bash
+git clone https://github.com/Abhinav-Vadlamani/Chess-Game.git
 cd chess_game
 ```
 
