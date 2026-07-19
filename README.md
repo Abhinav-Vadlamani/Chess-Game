@@ -1,60 +1,122 @@
-# Chess Game w/ AI bot
+# Chess Game
 
-A fully functional chess game built with Python and Pygame
+A local two-player and player-vs-bot chess game built with Python and Pygame.
+It includes rule-complete play, animated CBurnett-style piece sprites, a weighted
+opening book, and optional Stockfish-powered analysis.
 
-## 📁 Project Structure
+## Features
 
-```
-chess_game/
-├── main.py              # Entry point for the application
-├── game.py              # Main game controller and logic
-├── board.py             # Chess board representation and rules
-├── piece.py             # Piece and Move classes
-├── moves.py             # Per-piece move generation logic
-├── ai.py                # AI opponent implementation
-├── sunfish.py           # Vendored Sunfish engine (used by the hard bot)
-├── renderer.py          # All rendering/drawing logic
-├── constants.py         # Game constants and configuration
-└── README.md            # This file
-```
+- Player vs Player, with optional independent clocks
+- Player vs Bot with Easy, Medium, Hard (Sunfish), and optional Impossible
+  (Stockfish) difficulties
+- Legal move handling, including castling, en passant, promotion, checkmate,
+  stalemate, insufficient material, threefold repetition, and the fifty-move rule
+- A weighted opening book so bots play varied, recognizable opening lines
+- Smooth move, capture, castling, promotion, and game-end effects
+- High-resolution piece sprites and drag-and-drop or click-to-move controls
+- Move history and a Resign button; resignations correctly award the win to the
+  other side
+- Post-game review: replay the game, inspect the top three Stockfish lines, and
+  view an evaluation bar and score from White's perspective
 
-## 🎯 Features
+## Requirements
 
-### Game Modes
-- **Player vs Player (PvP)**: Play against a friend on the same computer
-- **Player vs Bot (PvBot)**: Challenge an AI opponent
+- Python 3.10 or newer
+- Pygame 2
+- Optional: Stockfish for Impossible difficulty and engine analysis
 
-### Complete Chess Implementation with AI features
-- **Full features (Checks, Checkmates, Stalemate, Draw, 50 move rule, etc)**
-- **Weighted opening book**: The bot plays varied, established opening moves before falling back to its selected search strategy when the book line ends or the opponent deviates.
-- **Easy, Medium, Hard, Impossible AI bots**: Easy bot uses random play outside the opening book, medium bot uses minimax, hard bot uses Sunfish, and Impossible uses a local Stockfish engine directly.
-- **Post-game analysis**: Open the review workspace after a game to replay every move and inspect Stockfish's top three principal variations for each position.
-- **Timer**: Timer available for User vs User play
-- **UI**: Easy to use UI with moves list, highlighting for moves, and dragging pieces around
+All piece artwork required by the game is already included in
+`assets/pieces/cburnett/`.
 
-### Stockfish (Impossible difficulty)
+## Setup
 
-The Impossible button unlocks when Stockfish is installed and available on your
-`PATH`. On macOS with Homebrew, run `brew install stockfish`; alternatively set
-`STOCKFISH_PATH` to the executable's full path before launching the game.
+Clone the repository and enter its directory:
 
-## 🚀 Installation
-
-### Prerequisites
-- Python 3.6 or higher
-- pip (Python package manager)
-
-### Setup
-
-1. **Clone or download the project**
 ```bash
 git clone https://github.com/Abhinav-Vadlamani/Chess-Game.git
-cd chess_game
+cd Chess-Game
 ```
 
-2. **Install pygame**
+Create and activate a virtual environment (recommended):
+
 ```bash
-pip install pygame
+python3 -m venv .venv
+source .venv/bin/activate
 ```
 
-3. **Run file through main.py**
+On Windows PowerShell, activate it with:
+
+```powershell
+.venv\Scripts\Activate.ps1
+```
+
+Install the game dependency:
+
+```bash
+python3 -m pip install --upgrade pip
+python3 -m pip install pygame
+```
+
+Run the game from the repository root:
+
+```bash
+python3 main.py
+```
+
+On Windows, use `python main.py` if `python3` is not available.
+
+## Optional: Stockfish
+
+Stockfish unlocks the **Impossible** bot difficulty and enables post-game engine
+lines and the evaluation bar. The rest of the game works without it.
+
+Install Stockfish using your platform's package manager, for example:
+
+```bash
+# macOS (Homebrew)
+brew install stockfish
+
+# Debian/Ubuntu
+sudo apt install stockfish
+```
+
+If the executable is not on your `PATH`, point the game to it before launching:
+
+```bash
+export STOCKFISH_PATH="/full/path/to/stockfish"
+python3 main.py
+```
+
+In Windows PowerShell:
+
+```powershell
+$env:STOCKFISH_PATH = "C:\full\path\to\stockfish.exe"
+python main.py
+```
+
+## How to play
+
+- Choose **Player vs Player** or **Player vs Bot** from the main menu.
+- Move pieces by dragging them or by clicking a piece and then its destination.
+- Use **Moves** to toggle the move-history panel.
+- Use **Resign** to resign for the side currently to move.
+- Press `R` to restart the current game, `Q` to quit, or `Esc` to return to the
+  menu.
+- After a game ends, choose **Review game**. Use the Previous/Next buttons or
+  the Left/Right arrow keys to step through positions.
+
+## Project structure
+
+```text
+Chess-Game/
+├── assets/pieces/cburnett/  # Bundled raster chess pieces
+├── main.py                  # Application entry point
+├── game.py                  # Game flow, input, animation, and analysis state
+├── board.py                 # Board state, move validation, and game rules
+├── piece.py                 # Piece and move models
+├── moves.py                 # Per-piece move generation
+├── ai.py                    # Opening book, bot logic, and Stockfish integration
+├── sunfish.py               # Bundled Sunfish engine for Hard difficulty
+├── renderer.py              # Pygame board, controls, and analysis UI
+└── constants.py             # Shared configuration and game constants
+```
