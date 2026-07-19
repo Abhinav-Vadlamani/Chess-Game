@@ -1,248 +1,164 @@
 from piece import Piece, Move
-from constants import PieceType, Color
-from moves import *
+from constants import PieceType, Color, FILES, RANKS
+from moves import (get_pawn_moves, get_knight_moves, get_bishop_moves,
+                   get_rook_moves, get_queen_moves, get_king_moves,
+                   get_pawn_attack_squares, get_king_attack_squares)
+
+# Letters used for each piece in algebraic notation (pawns have none).
+_ALGEBRAIC_SYMBOLS = {
+    PieceType.KING: 'K',
+    PieceType.QUEEN: 'Q',
+    PieceType.ROOK: 'R',
+    PieceType.BISHOP: 'B',
+    PieceType.KNIGHT: 'N',
+    PieceType.PAWN: '',
+}
+
+# Move generators for pieces that move the same way whether attacking or not.
+# Pawns and kings are handled separately because their attack and move patterns
+# differ (pawns push forward but capture diagonally; kings can castle).
+_SLIDING_AND_KNIGHT = {
+    PieceType.KNIGHT: get_knight_moves,
+    PieceType.BISHOP: get_bishop_moves,
+    PieceType.ROOK: get_rook_moves,
+    PieceType.QUEEN: get_queen_moves,
+}
+
+# Back-rank piece layout, left to right, shared by both colors.
+_BACK_RANK = [PieceType.ROOK, PieceType.KNIGHT, PieceType.BISHOP, PieceType.QUEEN,
+              PieceType.KING, PieceType.BISHOP, PieceType.KNIGHT, PieceType.ROOK]
+
+
+def create_starting_board():
+    """Return a fresh 8x8 board array set up in the standard starting position."""
+    board = [[None for _ in range(8)] for _ in range(8)]
+    for col, piece_type in enumerate(_BACK_RANK):
+        board[0][col] = Piece(piece_type, Color.BLACK)
+        board[1][col] = Piece(PieceType.PAWN, Color.BLACK)
+        board[6][col] = Piece(PieceType.PAWN, Color.WHITE)
+        board[7][col] = Piece(piece_type, Color.WHITE)
+    return board
+
+
+def _apply_move_to_array(board, move):
+    """Replay one recorded move onto a raw 8x8 board array (used for replays)."""
+    from_row, from_col = move.from_position
+    to_row, to_col = move.to_position
+
+    board[to_row][to_col] = board[from_row][from_col]
+    board[from_row][from_col] = None
+
+    if move.is_castling:
+        if to_col > from_col:  # Kingside: rook jumps from h-file to f-file
+            board[from_row][5] = board[from_row][7]
+            board[from_row][7] = None
+        else:  # Queenside: rook jumps from a-file to d-file
+            board[from_row][3] = board[from_row][0]
+            board[from_row][0] = None
+
+    if move.is_en_passant:
+        board[from_row][to_col] = None
+
+    if move.promotion_piece:
+        board[to_row][to_col].piece_type = move.promotion_piece.piece_type
+
 
 class ChessBoard:
     def __init__(self):
-        """
-        Initialize the chess board object
-        """
-
-        self.board = [[None for _ in range(8)] for _ in range(8)]
+        self.board = create_starting_board()
         self.current_turn = Color.WHITE
         self.move_history = []
         self.en_passant_target = None
-        self.setup_board()
-
-    def setup_board(self):
-        """
-        Setup the initial chess position
-        """
-        # Pawns
-        for i in range(8):
-            self.board[1][i] = Piece(PieceType.PAWN, Color.BLACK)
-            self.board[6][i] = Piece(PieceType.PAWN, Color.WHITE)
-        
-        # Rooks
-        self.board[0][0] = Piece(PieceType.ROOK, Color.BLACK)
-        self.board[0][7] = Piece(PieceType.ROOK, Color.BLACK)
-        self.board[7][0] = Piece(PieceType.ROOK, Color.WHITE)
-        self.board[7][7] = Piece(PieceType.ROOK, Color.WHITE)
-        
-        # Knights
-        self.board[0][1] = Piece(PieceType.KNIGHT, Color.BLACK)
-        self.board[0][6] = Piece(PieceType.KNIGHT, Color.BLACK)
-        self.board[7][1] = Piece(PieceType.KNIGHT, Color.WHITE)
-        self.board[7][6] = Piece(PieceType.KNIGHT, Color.WHITE)
-        
-        # Bishops
-        self.board[0][2] = Piece(PieceType.BISHOP, Color.BLACK)
-        self.board[0][5] = Piece(PieceType.BISHOP, Color.BLACK)
-        self.board[7][2] = Piece(PieceType.BISHOP, Color.WHITE)
-        self.board[7][5] = Piece(PieceType.BISHOP, Color.WHITE)
-        
-        # Queens
-        self.board[0][3] = Piece(PieceType.QUEEN, Color.BLACK)
-        self.board[7][3] = Piece(PieceType.QUEEN, Color.WHITE)
-        
-        # Kings
-        self.board[0][4] = Piece(PieceType.KING, Color.BLACK)
-        self.board[7][4] = Piece(PieceType.KING, Color.WHITE)
 
     def get_piece(self, row, col):
-        """
-        Return piece at a given position
-
-        Args:
-            row: row where piece is
-            col: column where piece is
-        
-        Returns:
-            piece at the position
-        """
-
+        """Return the piece at (row, col), or None if empty or off-board."""
         if 0 <= row < 8 and 0 <= col < 8:
             return self.board[row][col]
         return None
     
     def get_valid_moves(self, row, col):
-        """
-        Returns all valid moves for the piece at the given position
-
-        Args:
-            row: row where piece is
-            col: column where piece is
-
-        Returns:
-            list of all valid moves
-        """
-
+        """Return the legal moves for the current player's piece at (row, col)."""
         piece = self.get_piece(row, col)
         if not piece or piece.color != self.current_turn:
             return []
-        
-        # return pseudo legal moves
-        moves = self._get_pseudo_legal_moves(row, col)
 
-        # filter out moves that leave king in check
-        valid_moves = []
-        for move in moves:
-            if self._is_legal_move(row, col, move[0], move[1]):
-                valid_moves.append(move)
-        
-        return valid_moves
+        # Keep only pseudo-legal moves that don't leave our own king in check.
+        return [(to_row, to_col)
+                for to_row, to_col in self._get_pseudo_legal_moves(row, col)
+                if self._is_legal_move(row, col, to_row, to_col)]
     
     def _get_pseudo_legal_moves(self, row, col):
-        """
-        Return all legal moves without checking if king is in check
-
-        Args:
-            row: row where piece is
-            col: column where piece is
-        
-        Returns:
-            list of moves
-        """
-
+        """Return the piece's moves, ignoring king safety but including castling."""
         piece = self.board[row][col]
 
         if piece.piece_type == PieceType.PAWN:
-            moves = get_pawn_moves(self.board, row, col, self.en_passant_target)
+            return get_pawn_moves(self.board, row, col, self.en_passant_target)
 
-        elif piece.piece_type == PieceType.KNIGHT:
-            moves = get_knight_moves(self.board, row, col)
-
-        elif piece.piece_type == PieceType.BISHOP:
-            moves = get_bishop_moves(self.board, row, col)
-
-        elif piece.piece_type == PieceType.ROOK:
-            moves = get_rook_moves(self.board, row, col)
-
-        elif piece.piece_type == PieceType.QUEEN:
-            moves = get_queen_moves(self.board, row, col)
-
-        elif piece.piece_type == PieceType.KING:
+        if piece.piece_type == PieceType.KING:
             moves = get_king_moves(self.board, row, col)
-
-            # Add castling moves
             if not piece.has_moved and not self.is_in_check(piece.color):
                 if self._can_castle_kingside(row, col):
                     moves.append((row, col + 2))
                 if self._can_castle_queenside(row, col):
                     moves.append((row, col - 2))
-        else:
-            moves = []
-        
-        return moves
-    
+            return moves
+
+        return _SLIDING_AND_KNIGHT[piece.piece_type](self.board, row, col)
+
     def _can_castle_kingside(self, row, col):
-        """
-        Check if kingside castling is possible
-
-        Args:
-            row: current king row
-            col: current king col
-        
-        Returns:
-            True if kingside castling is possible, else false
-        """
-
+        """Return True if the king at (row, col) may castle kingside."""
         rook = self.board[row][7]
         if not rook or rook.piece_type != PieceType.ROOK or rook.has_moved:
             return False
         
-        # Check if squares are empty and not under attack
+        # The king's square and the two it crosses must be empty and unattacked.
         for c in range(col + 1, 7):
             if self.board[row][c] is not None:
                 return False
             if c <= col + 2 and self._is_square_attacked(row, c, self.current_turn):
                 return False
-            
+
         return True
-    
+
     def _can_castle_queenside(self, row, col):
-        """
-        Check if queenside castling is possible
-
-        Args:
-            row: current king row
-            col: current king col
-        
-        Returns:
-            True if queenside castling is possible, else false
-        """
-
+        """Return True if the king at (row, col) may castle queenside."""
         rook = self.board[row][0]
         if not rook or rook.piece_type != PieceType.ROOK or rook.has_moved:
             return False
-        
-        # Check if squares are empty and not under attack
+
+        # The king's square and the two it crosses must be empty and unattacked.
         for c in range(1, col):
             if self.board[row][c] is not None:
                 return False
             if c >= col - 2 and self._is_square_attacked(row, c, self.current_turn):
                 return False
-        
-        return True
-    
-    def _is_square_attacked(self, row, col, by_color):
-        """
-        Check if square is attacked by opponent
 
-        Args:
-            row: row of the square
-            col: column of the square
-            by_color: current color
-        
-        Returns:
-            True if square is attacked, else false
-        """
+        return True
+
+    def _attack_squares(self, row, col):
+        """Return the squares the piece at (row, col) attacks."""
+        piece_type = self.board[row][col].piece_type
+        if piece_type == PieceType.PAWN:
+            return get_pawn_attack_squares(self.board, row, col)
+        if piece_type == PieceType.KING:
+            return get_king_attack_squares(self.board, row, col)
+        return _SLIDING_AND_KNIGHT[piece_type](self.board, row, col)
+
+    def _is_square_attacked(self, row, col, by_color):
+        """Return True if (row, col) is attacked by any piece opposing by_color."""
         opponent_color = by_color.opposite()
 
         for r in range(8):
             for c in range(8):
                 piece = self.board[r][c]
                 if piece and piece.color == opponent_color:
-                    # Get attack squares for this piece
-                    if piece.piece_type == PieceType.PAWN:
-                        moves = get_pawn_attack_squares(self.board, r, c)
-
-                    elif piece.piece_type == PieceType.KNIGHT:
-                        moves = get_knight_moves(self.board, r, c)
-
-                    elif piece.piece_type == PieceType.BISHOP:
-                        moves = get_bishop_moves(self.board, r, c)
-
-                    elif piece.piece_type == PieceType.ROOK:
-                        moves = get_rook_moves(self.board, r, c)
-
-                    elif piece.piece_type == PieceType.QUEEN:
-                        moves = get_queen_moves(self.board, r, c)
-
-                    elif piece.piece_type == PieceType.KING:
-                        moves = get_king_attack_squares(self.board, r, c)
-
-                    else:
-                        moves = []
-                    
-                    if (row, col) in moves:
+                    if (row, col) in self._attack_squares(r, c):
                         return True
-        
+
         return False
-    
+
     def _is_legal_move(self, from_row, from_col, to_row, to_col):
-        """
-        Check if move is legal (doesn't leave king in check)
-
-        Args:
-            from_row: starting row
-            from_col: starting column
-            to_row: ending row
-            to_col: ending column
-
-        Returns:
-            True if the move is legal, else false
-        """
+        """Return True if making this move would not leave our own king in check."""
         piece = self.board[from_row][from_col]
         captured = self.board[to_row][to_col]
 
@@ -271,42 +187,31 @@ class ChessBoard:
 
         return not in_check
 
-    def is_in_check(self, color):
-        """
-        Check if king of given color is under check
-
-        Args:
-            color: color to check
-        """
-        
-        king_pos = None
+    def _find_king(self, color):
+        """Return the (row, col) of the given color's king, or None if absent."""
         for r in range(8):
             for c in range(8):
                 piece = self.board[r][c]
                 if piece and piece.piece_type == PieceType.KING and piece.color == color:
-                    king_pos = (r, c)
-                    break
-            if king_pos:
-                break
-        
+                    return (r, c)
+        return None
+
+    def is_in_check(self, color):
+        """Return True if the given color's king is currently attacked."""
+        king_pos = self._find_king(color)
         if not king_pos:
             return False
-    
         return self._is_square_attacked(king_pos[0], king_pos[1], color)
-    
+
     def make_move(self, from_row, from_col, to_row, to_col, promotion_piece=None):
         """
-        Make a move on the board
+        Play a move if it is legal, updating history, castling rights and turn.
 
         Args:
-            from_row: starting row
-            from_col: starting column
-            to_row: ending row
-            to_col: ending column
-            promotion_piece: PieceType for pawn promotion (default: QUEEN)
+            promotion_piece: piece type to promote a pawn to (defaults to QUEEN)
 
         Returns:
-            True if move was successful, else false
+            True if the move was legal and played, else False.
         """
         valid_moves = self.get_valid_moves(from_row, from_col)
 
@@ -367,55 +272,30 @@ class ChessBoard:
         return True
     
     def is_promotion_move(self, from_row, from_col, to_row, to_col):
-        """
-        Check if a move would result in pawn promotion
-
-        Args:
-            from_row: starting row
-            from_col: starting column
-            to_row: ending row
-            to_col: ending column
-
-        Returns:
-            True if the move is a pawn promotion
-        """
+        """Return True if moving this pawn to (to_row, to_col) would promote it."""
         piece = self.get_piece(from_row, from_col)
-        if piece and piece.piece_type == PieceType.PAWN:
-            if (piece.color == Color.WHITE and to_row == 0) or \
-               (piece.color == Color.BLACK and to_row == 7):
-                return True
+        if not piece or piece.piece_type != PieceType.PAWN:
+            return False
+        return ((piece.color == Color.WHITE and to_row == 0) or
+                (piece.color == Color.BLACK and to_row == 7))
+
+    def _current_player_has_moves(self):
+        """Return True if the current player has at least one legal move."""
+        for r in range(8):
+            for c in range(8):
+                piece = self.board[r][c]
+                if piece and piece.color == self.current_turn:
+                    if self.get_valid_moves(r, c):
+                        return True
         return False
 
     def is_checkmate(self):
-        """
-        Checks if current player is checkmated
-        """
-        if not self.is_in_check(self.current_turn):
-            return False
+        """Return True if the current player is in check with no legal moves."""
+        return self.is_in_check(self.current_turn) and not self._current_player_has_moves()
 
-        for r in range(8):
-            for c in range(8):
-                piece = self.board[r][c]
-                if piece and piece.color == self.current_turn:
-                    if len(self.get_valid_moves(r, c)) > 0:
-                        return False
-                    
-        return True
-    
     def is_stalemate(self):
-        """
-        Check if game is stalemate
-        """
-        if self.is_in_check(self.current_turn):
-            return False
-
-        for r in range(8):
-            for c in range(8):
-                piece = self.board[r][c]
-                if piece and piece.color == self.current_turn:
-                    if len(self.get_valid_moves(r, c)) > 0:
-                        return False
-        return True
+        """Return True if the current player is not in check but has no legal moves."""
+        return not self.is_in_check(self.current_turn) and not self._current_player_has_moves()
 
     def is_insufficient_material(self):
         """
@@ -471,54 +351,24 @@ class ChessBoard:
         return False
 
     def is_threefold_repetition(self):
-        """
-        Check if the current position has occurred three times.
-        """
+        """Return True if the current position has occurred three times."""
         if len(self.move_history) < 8:
             return False
 
         current_position = self._get_position_key()
-        count = 1
 
-        # Check previous positions by replaying moves
+        # Rebuild every past position by replaying the game from the start.
         temp_board = ChessBoard()
         positions = [temp_board._get_position_key()]
-
         for move in self.move_history:
-            from_row, from_col = move.from_position
-            to_row, to_col = move.to_position
-            promotion = move.promotion_piece.piece_type if move.promotion_piece else None
-            temp_board.board[to_row][to_col] = temp_board.board[from_row][from_col]
-            temp_board.board[from_row][from_col] = None
-
-            # Handle castling
-            if move.is_castling:
-                if to_col > from_col:  # Kingside
-                    temp_board.board[from_row][5] = temp_board.board[from_row][7]
-                    temp_board.board[from_row][7] = None
-                else:  # Queenside
-                    temp_board.board[from_row][3] = temp_board.board[from_row][0]
-                    temp_board.board[from_row][0] = None
-
-            # Handle en passant
-            if move.is_en_passant:
-                temp_board.board[from_row][to_col] = None
-
-            # Handle promotion
-            if promotion:
-                temp_board.board[to_row][to_col].piece_type = promotion
-
+            _apply_move_to_array(temp_board.board, move)
             temp_board.current_turn = temp_board.current_turn.opposite()
             positions.append(temp_board._get_position_key())
 
-        # Count occurrences of current position
-        count = positions.count(current_position)
-        return count >= 3
+        return positions.count(current_position) >= 3
 
     def _get_position_key(self):
-        """
-        Get a hashable key representing the current board position.
-        """
+        """Return a hashable key identifying the current position and side to move."""
         key = []
         for r in range(8):
             for c in range(8):
@@ -529,58 +379,40 @@ class ChessBoard:
         return tuple(key)
 
     def is_fifty_move_rule(self):
-        """
-        Check if 50 moves have been made without a pawn move or capture.
-        """
-        if len(self.move_history) < 100:  # 50 moves = 100 half-moves
+        """Return True if the last 50 full moves had no capture and no pawn move."""
+        if len(self.move_history) < 100:  # 50 full moves = 100 half-moves
             return False
 
-        # Check last 100 half-moves (50 full moves)
         for move in self.move_history[-100:]:
-            # Check for capture
             if move.captured_piece:
                 return False
-            # Check for pawn move
-            from_row, from_col = move.from_position
-            # We need to check what piece made the move - look at to_position
+            # The moved piece now sits on the destination square.
             to_row, to_col = move.to_position
             piece = self.board[to_row][to_col]
             if piece and piece.piece_type == PieceType.PAWN:
                 return False
-            # Also check promotion (which means a pawn moved)
-            if move.promotion_piece:
+            if move.promotion_piece:  # a promotion means a pawn moved
                 return False
 
         return True
 
     def get_all_valid_moves(self):
-        """
-        Returns list of all valid moves for the current player
-        """
-
+        """Return [((from_row, from_col), (to_row, to_col)), ...] for the current player."""
         all_moves = []
         for r in range(8):
             for c in range(8):
                 piece = self.board[r][c]
                 if piece and piece.color == self.current_turn:
-                    moves = self.get_valid_moves(r, c)
-                    for move in moves:
+                    for move in self.get_valid_moves(r, c):
                         all_moves.append(((r, c), move))
         return all_moves
 
     def make_move_with_undo(self, from_row, from_col, to_row, to_col):
         """
-        Make a move and return undo information for unmake_move.
-        This is used by the AI for fast move simulation without deep copying.
+        Play a move and return undo info, or None if the move is illegal.
 
-        Args:
-            from_row: starting row
-            from_col: starting column
-            to_row: ending row
-            to_col: ending column
-
-        Returns:
-            undo_info dict if move was made, None if invalid
+        Used by the AI to search moves without deep-copying the board; pass the
+        returned dict to unmake_move to restore the previous position.
         """
         valid_moves = self.get_valid_moves(from_row, from_col)
 
@@ -726,172 +558,43 @@ class ChessBoard:
 
     def get_move_history_notation(self):
         """
-        Get move history in algebraic notation.
+        Return the move history in algebraic notation, e.g. ['e4', 'e5', 'Nf3'].
 
-        Returns:
-            List of move strings in algebraic notation (e.g., ['e4', 'e5', 'Nf3', 'Nc6'])
+        The game is replayed from the start so each move is named using the piece
+        that actually stood on the from-square at that point.
         """
-        files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
-        ranks = ['8', '7', '6', '5', '4', '3', '2', '1']
-
-        piece_symbols = {
-            PieceType.KING: 'K',
-            PieceType.QUEEN: 'Q',
-            PieceType.ROOK: 'R',
-            PieceType.BISHOP: 'B',
-            PieceType.KNIGHT: 'N',
-            PieceType.PAWN: ''
-        }
-
         notation_list = []
+        replay = create_starting_board()
 
         for move in self.move_history:
             from_row, from_col = move.from_position
-            to_row, to_col = move.to_position
-
-            # Castling
-            if move.is_castling:
-                if to_col > from_col:
-                    notation = 'O-O'  # Kingside
-                else:
-                    notation = 'O-O-O'  # Queenside
-            else:
-                # Get piece symbol (need to figure out what piece moved)
-                # Since the piece has already moved, we need to look at the destination
-                # But for promotions, piece_type changed. Use promotion_piece info.
-                if move.promotion_piece:
-                    piece_symbol = ''  # Pawn
-                    promotion_symbol = piece_symbols.get(move.promotion_piece.piece_type, '')
-                else:
-                    # We need to reconstruct what piece was there
-                    # Look at the piece that's currently at to_position after all moves
-                    # This is tricky - let's track it differently
-                    # For now, we'll replay to find piece types
-                    piece_symbol = ''
-                    promotion_symbol = ''
-
-                to_square = files[to_col] + ranks[to_row]
-
-                # Check for capture
-                capture = 'x' if move.captured_piece else ''
-
-                # For pawns capturing, include the file
-                if piece_symbol == '' and capture:
-                    from_file = files[from_col]
-                    notation = f"{from_file}{capture}{to_square}"
-                else:
-                    notation = f"{piece_symbol}{capture}{to_square}"
-
-                # Add promotion
-                if move.promotion_piece:
-                    notation += f"={piece_symbols.get(move.promotion_piece.piece_type, 'Q')}"
-
-            notation_list.append(notation)
-
-        # Now we need to add piece symbols - replay the game to track pieces
-        # Let's do a proper implementation
-        return self._get_proper_notation()
-
-    def _get_proper_notation(self):
-        """
-        Get proper algebraic notation by replaying moves.
-        """
-        files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
-        ranks = ['8', '7', '6', '5', '4', '3', '2', '1']
-
-        piece_symbols = {
-            PieceType.KING: 'K',
-            PieceType.QUEEN: 'Q',
-            PieceType.ROOK: 'R',
-            PieceType.BISHOP: 'B',
-            PieceType.KNIGHT: 'N',
-            PieceType.PAWN: ''
-        }
-
-        notation_list = []
-
-        # Create a temporary board to replay
-        temp_board = [[None for _ in range(8)] for _ in range(8)]
-
-        # Setup initial position
-        for i in range(8):
-            temp_board[1][i] = Piece(PieceType.PAWN, Color.BLACK)
-            temp_board[6][i] = Piece(PieceType.PAWN, Color.WHITE)
-
-        temp_board[0][0] = Piece(PieceType.ROOK, Color.BLACK)
-        temp_board[0][7] = Piece(PieceType.ROOK, Color.BLACK)
-        temp_board[7][0] = Piece(PieceType.ROOK, Color.WHITE)
-        temp_board[7][7] = Piece(PieceType.ROOK, Color.WHITE)
-
-        temp_board[0][1] = Piece(PieceType.KNIGHT, Color.BLACK)
-        temp_board[0][6] = Piece(PieceType.KNIGHT, Color.BLACK)
-        temp_board[7][1] = Piece(PieceType.KNIGHT, Color.WHITE)
-        temp_board[7][6] = Piece(PieceType.KNIGHT, Color.WHITE)
-
-        temp_board[0][2] = Piece(PieceType.BISHOP, Color.BLACK)
-        temp_board[0][5] = Piece(PieceType.BISHOP, Color.BLACK)
-        temp_board[7][2] = Piece(PieceType.BISHOP, Color.WHITE)
-        temp_board[7][5] = Piece(PieceType.BISHOP, Color.WHITE)
-
-        temp_board[0][3] = Piece(PieceType.QUEEN, Color.BLACK)
-        temp_board[7][3] = Piece(PieceType.QUEEN, Color.WHITE)
-
-        temp_board[0][4] = Piece(PieceType.KING, Color.BLACK)
-        temp_board[7][4] = Piece(PieceType.KING, Color.WHITE)
-
-        for move in self.move_history:
-            from_row, from_col = move.from_position
-            to_row, to_col = move.to_position
-
-            piece = temp_board[from_row][from_col]
+            piece = replay[from_row][from_col]
             if not piece:
                 notation_list.append("???")
                 continue
-
-            # Castling
-            if move.is_castling:
-                if to_col > from_col:
-                    notation = 'O-O'
-                else:
-                    notation = 'O-O-O'
-            else:
-                piece_symbol = piece_symbols.get(piece.piece_type, '')
-                to_square = files[to_col] + ranks[to_row]
-                capture = 'x' if move.captured_piece else ''
-
-                if piece.piece_type == PieceType.PAWN:
-                    if capture:
-                        notation = f"{files[from_col]}{capture}{to_square}"
-                    else:
-                        notation = to_square
-                else:
-                    notation = f"{piece_symbol}{capture}{to_square}"
-
-                # Promotion
-                if move.promotion_piece:
-                    notation += f"={piece_symbols.get(move.promotion_piece.piece_type, 'Q')}"
-
-            notation_list.append(notation)
-
-            # Update temp board
-            temp_board[to_row][to_col] = piece
-            temp_board[from_row][from_col] = None
-
-            # Handle castling rook movement
-            if move.is_castling:
-                if to_col > from_col:  # Kingside
-                    temp_board[from_row][5] = temp_board[from_row][7]
-                    temp_board[from_row][7] = None
-                else:  # Queenside
-                    temp_board[from_row][3] = temp_board[from_row][0]
-                    temp_board[from_row][0] = None
-
-            # Handle en passant
-            if move.is_en_passant:
-                temp_board[from_row][to_col] = None
-
-            # Handle promotion
-            if move.promotion_piece:
-                temp_board[to_row][to_col].piece_type = move.promotion_piece.piece_type
+            notation_list.append(self._move_to_notation(move, piece))
+            _apply_move_to_array(replay, move)
 
         return notation_list
+
+    @staticmethod
+    def _move_to_notation(move, piece):
+        """Render a single move as an algebraic notation string."""
+        from_row, from_col = move.from_position
+        to_row, to_col = move.to_position
+
+        if move.is_castling:
+            return 'O-O' if to_col > from_col else 'O-O-O'
+
+        to_square = FILES[to_col] + RANKS[to_row]
+        capture = 'x' if move.captured_piece else ''
+
+        if piece.piece_type == PieceType.PAWN:
+            # Pawn captures are written with the origin file, e.g. "exd5".
+            notation = f"{FILES[from_col]}{capture}{to_square}" if capture else to_square
+        else:
+            notation = f"{_ALGEBRAIC_SYMBOLS[piece.piece_type]}{capture}{to_square}"
+
+        if move.promotion_piece:
+            notation += f"={_ALGEBRAIC_SYMBOLS.get(move.promotion_piece.piece_type, 'Q')}"
+        return notation

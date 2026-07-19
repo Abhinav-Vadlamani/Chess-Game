@@ -8,16 +8,17 @@ SQUARE_SIZE = BOARD_SIZE // 8
 FPS = 60
 
 # Colors
-LIGHT_SQUARE = (240, 217, 181)
-DARK_SQUARE = (181, 136, 99)
-HIGHLIGHT_MOVE = (186, 202, 68)
-HIGHLIGHT_SELECTED = (246, 246, 130)
-HIGHLIGHT_CHECK = (255, 100, 100)
-HIGHLIGHT_LAST_MOVE = (205, 210, 106)
-BG_COLOR = (49, 46, 43)
-TEXT_COLOR = (255, 255, 255)
-BUTTON_COLOR = (130, 151, 105)
-BUTTON_HOVER = (150, 171, 125)
+# Classic blue board theme, inspired by traditional tournament diagrams.
+LIGHT_SQUARE = (238, 239, 241)
+DARK_SQUARE = (119, 143, 188)
+HIGHLIGHT_MOVE = (141, 174, 111)
+HIGHLIGHT_SELECTED = (244, 207, 104)
+HIGHLIGHT_CHECK = (221, 103, 96)
+HIGHLIGHT_LAST_MOVE = (174, 193, 119)
+BG_COLOR = (244, 246, 250)
+TEXT_COLOR = (39, 47, 61)
+BUTTON_COLOR = (89, 116, 163)
+BUTTON_HOVER = (111, 140, 190)
 
 # Board coordinates
 FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
@@ -27,7 +28,8 @@ RANKS = ['8', '7', '6', '5', '4', '3', '2', '1']
 AI_DIFFICULTY_DEPTHS = {
     'easy': 1,
     'medium': 3,
-    'hard': 3  # unused - hard uses Sunfish engine
+    'hard': 3,  # unused - hard uses Sunfish engine
+    'impossible': 20  # Stockfish controls its own UCI search depth
 }
 
 # Piece values

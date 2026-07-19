@@ -10,8 +10,9 @@ chess_game/
 ├── game.py              # Main game controller and logic
 ├── board.py             # Chess board representation and rules
 ├── piece.py             # Piece and Move classes
-├── move_generator.py    # Move generation logic
+├── moves.py             # Per-piece move generation logic
 ├── ai.py                # AI opponent implementation
+├── sunfish.py           # Vendored Sunfish engine (used by the hard bot)
 ├── renderer.py          # All rendering/drawing logic
 ├── constants.py         # Game constants and configuration
 └── README.md            # This file
@@ -25,9 +26,17 @@ chess_game/
 
 ### Complete Chess Implementation with AI features
 - **Full features (Checks, Checkmates, Stalemate, Draw, 50 move rule, etc)**
-- **Easy, Medium, Hard AI bots**: Easy bot randomly picks a move, medium bot uses minimax algorithm, and hardbot uses sunfish algorithm + book of openings
+- **Weighted opening book**: The bot plays varied, established opening moves before falling back to its selected search strategy when the book line ends or the opponent deviates.
+- **Easy, Medium, Hard, Impossible AI bots**: Easy bot uses random play outside the opening book, medium bot uses minimax, hard bot uses Sunfish, and Impossible uses a local Stockfish engine directly.
+- **Post-game analysis**: Open the review workspace after a game to replay every move and inspect Stockfish's top three principal variations for each position.
 - **Timer**: Timer available for User vs User play
 - **UI**: Easy to use UI with moves list, highlighting for moves, and dragging pieces around
+
+### Stockfish (Impossible difficulty)
+
+The Impossible button unlocks when Stockfish is installed and available on your
+`PATH`. On macOS with Homebrew, run `brew install stockfish`; alternatively set
+`STOCKFISH_PATH` to the executable's full path before launching the game.
 
 ## 🚀 Installation
 
